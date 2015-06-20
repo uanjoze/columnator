@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en_GB">
+<head>
+    <meta charset="utf-8">
+    <title>Column arranging test</title>
+    <style>
+        /* Yes, inline, but just because this is a test - same for JS */
+        body {
+            margin: 0;
+        }
+
+        .wrapper {
+            margin: 0 auto;
+            max-width: 960px;
+        }
+
+        .grid-element {
+            background: #384786;
+            display: inline-block;
+            vertical-align: top;
+        }
+
+        .button-scroll-to-top {
+            background: #30a221;
+            border: 1px solid #30a221;
+            border-radius: 3px;
+            cursor: pointer;
+            opacity: 0;
+            padding: 10px;
+            position: fixed;
+            right: 40px;
+            top: -100px;
+            transform: translateZ(0); /* promote to its own layer */
+            transition: .3s all ease-out;
+        }
+
+        .button-scroll-to-top.is-active {
+            top: 40px;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper"></div>
+
+<script>
+var columnator = {
+
+    _options: {
+        column_size: 200,
+        column_gutter: 20
+    },
+
+    create_dummy_content: function() {
+        var html = '',
+            column_size = this._options.column_size,
+            number_of_columns = 4,
+            column_gutter = this._options.column_gutter,
+            elements = [],
+            max_heights = [];
+
+        for (var i = 0; i < 10; i++) {
+            var j = 0,
+                new_row = false,
+                total_width = (column_size + (column_gutter * 2)) * number_of_columns;
+
+            elements[i] = [];
+            max_heights = [];
+
+            while(!new_row) {
+                var width = Math.floor((Math.random() * 10) + 1) > 7 ? (column_size + column_gutter) * 2 : column_size,
+                    height = 100 + (Math.floor((Math.random() * 20) + 1) * 20);
+
+                total_width -= width + (column_gutter * 2);
+
+                if (total_width < 0 && width > column_size) {
+                    if (total_width + width - column_size) {
+                        // we've ran out of space
+                        new_row = true;
+                        break;
+                    } else {
+                        // not enough space for a double sized one, but enough for a single one
+                        width = column_size;
+                        new_row = true;
+                    }
+                }
+
+                if (total_width < column_size) {
+                    new_row = true;
+                }
+
+                elements[i][j] = { width: width, height: height };
+
+                j++;
+            }
+        }
+
+        for (var i = 0; i < elements.length; i++) {
+            max_heights[i] = 0;
+            for (var j = 0; j < elements[i].length; j++) {
+                if (max_heights[i] < elements[i][j].height) {
+                    max_heights[i] = elements[i][j].height;
+                }
+            }
+        }
+
+        for (var i = 0; i < elements.length; i++) {
+            var margin_top = column_gutter;
+            for (var j = 0; j < elements[i].length; j++) {
+                if (i > 0) {
+                    if (elements[i][j].size === 'single') {
+                        if (elements[i-1][j] && elements[i-1][j].hasOwnProperty(height)) {
+                            margin_top = elements[i-1][j].height - max_heights[i-1] + 20;
+                        }
+                    } else {
+
+                    }
+                }
+                html += '<div class="grid-element" style="width:' + elements[i][j].width + 'px; height:' + elements[i][j].height + 'px; margin:' + margin_top + 'px ' + column_gutter + 'px ' + column_gutter + 'px;"></div>';
+            }
+        }
+
+        document.getElementsByClassName('wrapper')[0].insertAdjacentHTML('afterbegin', html);
+    },
+
+    init: function() {
+        var elements = document.getElementsByClassName('grid-element');
+
+        // organise elements on the grid
+        this._name_elements(elements);
+
+        // check elements with what they have above themselves
+        for (var i = 0; i < elements.length; i++) {
+            if (parseInt(elements[i].dataset.row) > 1) {
+                this._move_element(elements[i], elements);
+            }
+        }
+
+    },
+
+    _name_elements: function(elements) {
+        // easier if we know the row and column via data attributes
+        var offset_top = elements[0].offsetTop,
+            current_row = 1,
+            current_column = 1;
+
+        for (var i = 0; i < elements.length; i++) {
+            if (elements[i].offsetTop !== offset_top) {
+                offset_top = elements[i].offsetTop;
+
+                max_height = 0;
+                current_row++;
+                current_column = 1;
+            }
+
+            elements[i].dataset.row = current_row;
+            elements[i].dataset.columns = elements[i].offsetWidth > this._options.column_size ? [current_column, (current_column + 1)] : current_column;
+
+            if (elements[i].offsetWidth > this._options.column_size) {
+                current_column += 2;
+            } else {
+                current_column++;
+            }
+        }
+    },
+
+    _move_element: function(element, elements) {
+        // this could be reused to recalculate location if new items are loaded afterwards
+        var check_heights = this._check_heights(element.dataset.row, element.dataset.columns, element, elements);
+
+        element.style.marginTop = -(check_heights - this._options.column_gutter * 2) + 'px';
+    },
+
+    _check_heights: function(row, columns, element, elements) {
+        var available_height = 0,
+            columns = columns.split(',');
+
+        // check maximum height for elements that are above the element being calculated
+        for (var i = 0; i < columns.length; i++) {
+            for (var j = 0; j < elements.length; j++) {
+                if (parseInt(elements[j].dataset.row) === (row - 1) && elements[j].dataset.columns.split(',').indexOf(columns[i]) >= 0) {
+                    var element_on_top = elements[j].getBoundingClientRect(),
+                        current_element = element.getBoundingClientRect();
+
+                    current_available_height = current_element.top - (element_on_top.top + element_on_top.height + this._options.column_gutter);
+                    available_height = current_available_height > available_height && available_height > 0 ? available_height : current_available_height;
+                }
+            }
+        }
+
+        return available_height;
+    },
+
+    setup_scrollToTop: function() {
+        var scrollToTop_element = '<button class="js-scroll-to-top button-scroll-to-top"><svg xmlns="http://www.w3.org/2000/svg" height="40" width="50" viewBox="-19 288.9 571.4 321.4"><path fill="#ffffff" d="M552.4 574.6c0 9.7-3.5 18-10.6 25.1s-15.4 10.6-25.1 10.6h-500c-9.7 0-18-3.5-25.1-10.6S-19 584.3-19 574.6s3.5-18 10.6-25.1l250-250c7.1-7.1 15.4-10.6 25.1-10.6s18 3.5 25.1 10.6l250 250c7.1 7 10.6 15.4 10.6 25.1z"/></svg></button>';
+
+        document.getElementsByTagName('body')[0].insertAdjacentHTML('beforeend', scrollToTop_element);
+
+        var that = this,
+            element = document.getElementsByClassName('js-scroll-to-top')[0];
+
+        element.addEventListener('click', function() {
+            that._scroll_to_top(1000);
+        });
+
+        window.addEventListener('scroll', function(event) {
+            var offset = document.documentElement.scrollTop;
+
+            if (offset > 200) {
+                element.classList.add('is-active');
+            } else {
+                element.classList.remove('is-active');
+            }
+        }, false);
+    },
+
+    _scroll_to_top: function(scroll_duration) {
+        // START: I got this bit from Stack Overflow, so it's no a linear scroll, which was what I wrote
+        // http://stackoverflow.com/questions/21474678/scrolltop-animation-without-jquery
+        var scroll_height = window.scrollY,
+            scroll_step = Math.PI / (scroll_duration / 15),
+            cos_parameter = scroll_height / 2,
+            scroll_count = 0,
+            scroll_margin;
+
+            requestAnimationFrame(step);
+
+            function step() {
+                setTimeout(function() {
+                    if (window.scrollY != 0) {
+                        requestAnimationFrame(step);
+                        scroll_count = scroll_count + 1;
+                        scroll_margin = cos_parameter - cos_parameter * Math.cos(scroll_count * scroll_step);
+                        window.scrollTo(0, (scroll_height - scroll_margin));
+                    }
+                }, 15 );
+            }
+        // END
+    }
+
+};
+
+columnator.create_dummy_content();
+
+columnator.init();
+columnator.setup_scrollToTop();
+
+</script>
+
+</body>
+</html>
